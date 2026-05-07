@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(Get-ChildItem \"D:\\\\Users\\\\JERRY\\\\Documents\\\\Micro-SaaS\\\\Receipt_Expense Report_Tax Catigory\\\\src\" -Recurse -Directory | Select-Object FullName | ForEach-Object { $_.FullName.Replace\\(\"D:\\\\Users\\\\JERRY\\\\Documents\\\\Micro-SaaS\\\\Receipt_Expense Report_Tax Catigory\\\\\", \"\"\\) })"
+    ]
+  }
+}
