@@ -1,6 +1,12 @@
-@import "tw-animate-css";
+﻿@import "tw-animate-css";
 @import "shadcn/tailwind.css";
-@tailwind base;
+
+@theme inline {
+  --color-sparkles-color: var(--sparkles-color);
+  --color-gradient-color: var(--gradient-color);
+}
+
+@tailwind base;@tailwind base;
 @tailwind components;
 @tailwind utilities;
 
@@ -74,6 +80,8 @@
     --sidebar-accent-foreground: oklch(0.985 0 0);
     --sidebar-border: oklch(1 0 0 / 10%);
     --sidebar-ring: oklch(0.556 0 0);
+      --gradient-color: #8350e8;
+      --sparkles-color: #ffffff;
   }
   .theme {
     --font-heading: var(--font-sans);
@@ -98,3 +106,4 @@
     @apply bg-background text-foreground;
   }
 }
+
