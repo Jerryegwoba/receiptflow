@@ -1,19 +1,11 @@
 "use server";
 
 import { createServerClient } from "@/lib/supabase/server";
-import { createClient } from "@/lib/supabase/client";
 import { extractedReceiptSchema } from "@/lib/validators/receipt";
-import { Anthropic } from "@anthropic-ai/sdk";
-import { getReportData, groupByCategory } from "@/lib/actions/reports";
+import { getReportData } from "@/lib/actions/reports";
+import { groupByCategory } from "@/lib/reports/group";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-
-// Initialize Anthropic client (server-side only)
-function getAnthropicClient() {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) throw new Error("ANTHROPIC_API_KEY not configured");
-  return new Anthropic({ apiKey });
-}
 
 type UploadResult = {
   error?: string;
@@ -24,6 +16,7 @@ type UploadResult = {
 interface ProfileCheck {
   subscription_tier: "free" | "pro";
   receipt_count_this_month: number;
+  updated_at: string;
 }
 
 export async function uploadReceipt(
@@ -41,7 +34,7 @@ export async function uploadReceipt(
   // Check subscription limits
   const { data: profileData } = await (supabase
     .from("profiles") as any)
-    .select("subscription_tier, receipt_count_this_month")
+    .select("subscription_tier, receipt_count_this_month, updated_at")
     .eq("user_id", user.id)
     .single();
 
@@ -76,6 +69,11 @@ export async function uploadReceipt(
   }
 
   try {
+    // Reset monthly count if we've entered a new month
+    if (profile) {
+      await resetMonthlyCountIfNeeded(supabase, user.id, profile.updated_at);
+    }
+
     // Upload to Supabase Storage
     const fileExt = file.name.split(".").pop();
     const fileName = `${user.id}/${Date.now()}.${fileExt}`;
@@ -118,8 +116,12 @@ export async function uploadReceipt(
       user_id_input: user.id,
     });
 
-    // Trigger AI extraction (async - we'll do it inline for now)
-    extractReceiptData(receipt.id, imageUrl);
+    // Trigger AI extraction via API route (fire-and-forget)
+    fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/ai`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ receiptId: receipt.id, imageUrl }),
+    }).catch((err) => console.error("AI extraction trigger failed:", err));
 
     revalidatePath("/receipts");
     return { success: true, receiptId: receipt.id };
@@ -131,82 +133,26 @@ export async function uploadReceipt(
   }
 }
 
-// This runs as a background-like operation
-async function extractReceiptData(receiptId: string, imageUrl: string) {
-  try {
-    const supabase = await createServerClient();
-    const anthropic = getAnthropicClient();
+async function resetMonthlyCountIfNeeded(
+  supabase: any,
+  userId: string,
+  updatedAt: string
+): Promise<void> {
+  const lastUpdate = new Date(updatedAt);
+  const now = new Date();
+  const lastMonth = lastUpdate.getMonth();
+  const lastYear = lastUpdate.getFullYear();
+  const currentMonth = now.getMonth();
+  const currentYear = now.getFullYear();
 
-    // Fetch the image
-    const imageResponse = await fetch(imageUrl);
-    const imageBuffer = await imageResponse.arrayBuffer();
-    const base64Image = Buffer.from(imageBuffer).toString("base64");
-    const mediaType = imageResponse.headers.get("content-type") || "image/jpeg";
-
-    // Call Claude for receipt extraction
-    const message = await anthropic.messages.create({
-      model: "claude-3-5-haiku-20241022",
-      max_tokens: 1024,
-      messages: [
-        {
-          role: "user",
-          content: [
-            {
-              type: "image",
-              source: {
-                type: "base64",
-                media_type: mediaType as any,
-                data: base64Image,
-              },
-            },
-            {
-              type: "text",
-              text: `Extract the following information from this receipt image. Return ONLY a valid JSON object with these fields:
-- merchant: (string) the merchant/store name
-- date: (string) the transaction date in ISO format (YYYY-MM-DD)
-- amount: (number) the total amount as a number (no currency symbols)
-- currency: (string) the 3-letter currency code (e.g., USD, EUR, GBP)
-- category: (string) one of: Software & Tools, Marketing, Office Supplies, Travel & Transport, Meals & Entertainment, Professional Services, Equipment, Utilities, Rent, Miscellaneous
-- confidence: (number) your confidence score from 0-100
-- notes: (string, optional) any unusual observations
-
-If you cannot read the receipt clearly, set confidence below 50 and note the issue in notes.`,
-            },
-          ],
-        },
-      ],
-    });
-
-    // Parse the response
-    const contentBlock = message.content[0];
-    if (contentBlock.type !== "text") {
-      throw new Error("Unexpected response type from AI");
-    }
-
-    const extractedText = contentBlock.text;
-    const jsonMatch = extractedText.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      throw new Error("No valid JSON found in AI response");
-    }
-
-    const parsed = JSON.parse(jsonMatch[0]);
-    const validated = extractedReceiptSchema.parse(parsed);
-
-    // Update receipt with extracted data
-    await (supabase
-      .from("receipts") as any)
+  if (lastYear < currentYear || lastMonth < currentMonth) {
+    await supabase
+      .from("profiles")
       .update({
-        extracted_data: validated as any,
-        status: "processed",
+        receipt_count_this_month: 0,
+        updated_at: now.toISOString(),
       })
-      .eq("id", receiptId);
-  } catch (error) {
-    // Update receipt status to failed
-    const supabase = await createServerClient();
-    await (supabase
-      .from("receipts") as any)
-      .update({ status: "failed" })
-      .eq("id", receiptId);
+      .eq("user_id", userId);
   }
 }
 

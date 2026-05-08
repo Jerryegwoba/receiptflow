@@ -26,7 +26,7 @@ export default async function ReportsPage({
 
   // Calculate totals
   const totalAmount = receipts.reduce((sum, r) => {
-    const amt = r.extracted_data?.amount || 0;
+    const amt = (r.extracted_data as any)?.amount || 0;
     return sum + (typeof amt === "number" ? amt : 0);
   }, 0);
 
@@ -129,7 +129,7 @@ export default async function ReportsPage({
 
           {/* Export Buttons */}
           <div className="flex gap-3">
-            <form action={exportCSV}>
+            <form action={exportCSV as any}>
               <input type="hidden" name="start" value={startDate} />
               <input type="hidden" name="end" value={endDate} />
               <Button type="submit" variant="outline">

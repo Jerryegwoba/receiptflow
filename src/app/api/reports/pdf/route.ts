@@ -78,18 +78,39 @@ export async function GET(request: NextRequest) {
   const categoryGroups = groupByCategory(receipts as any);
 
   const totalAmount = receipts.reduce((sum, r) => {
-    const amt = r.extracted_data?.amount || 0;
+    const amt = (r.extracted_data as any)?.amount || 0;
     return sum + (typeof amt === "number" ? amt : 0);
   }, 0);
 
+  function formatAmount(val: unknown): string {
+    const num = typeof val === "number" ? val : 0;
+    return num.toFixed(2);
+  }
+
+  const categoryRows = Object.entries(categoryGroups).map(([cat, data]) =>
+    React.createElement(View, { style: styles.tableRow, key: cat },
+      React.createElement(Text, { style: [styles.cell, { flex: 2 }] }, cat),
+      React.createElement(Text, { style: styles.cell }, String((data as any).count)),
+      React.createElement(Text, { style: [styles.cell, { textAlign: "right" }] }, `$${(data as any).total.toFixed(2)}`),
+    )
+  );
+
+  const receiptRows = receipts.map((receipt, i) => {
+    const data = (receipt.extracted_data as any) || {};
+    return React.createElement(View, { style: styles.tableRow, key: i },
+      React.createElement(Text, { style: [styles.cell, { flex: 2 }] }, data?.date || receipt.created_at?.split("T")[0] || ""),
+      React.createElement(Text, { style: [styles.cell, { flex: 3 }] }, data?.merchant || "—"),
+      React.createElement(Text, { style: styles.cell }, data?.category || "Miscellaneous"),
+      React.createElement(Text, { style: [styles.cell, { textAlign: "right" }] }, `$${formatAmount(data?.amount)}`),
+    );
+  });
+
   const element = React.createElement(Document, { title: "Expense Report" },
-    React.createElement(View, { style: styles.page },
-      // Header
+    React.createElement(Page, { size: "A4", style: styles.page },
       React.createElement(View, { style: styles.header },
         React.createElement(Text, { style: styles.title }, "ReceiptFlow Expense Report"),
         React.createElement(Text, { style: styles.subtitle }, `${startDate} to ${endDate} • ${receipts.length} receipts • Total: $${totalAmount.toFixed(2)}`),
       ),
-      // Category Summary
       React.createElement(View, { style: { marginBottom: 20 } },
         React.createElement(Text, { style: { fontSize: 14, fontWeight: "bold", color: "#10b981", marginBottom: 10, textTransform: "uppercase" } }, "Category Summary"),
         React.createElement(View, { style: styles.table },
@@ -98,16 +119,9 @@ export async function GET(request: NextRequest) {
             React.createElement(Text, { style: styles.cell }, "Count"),
             React.createElement(Text, { style: [styles.cell, { textAlign: "right" }] }, "Total"),
           ),
-          ...Object.entries(categoryGroups).map(([cat, data]) =>
-            React.createElement(View, { style: styles.tableRow, key: cat },
-              React.createElement(Text, { style: [styles.cell, { flex: 2 }] }, cat),
-              React.createElement(Text, { style: styles.cell }, String(data.count)),
-              React.createElement(Text, { style: [styles.cell, { textAlign: "right" }] }, `$${data.total.toFixed(2)}`),
-            )
-          ),
+          categoryRows,
         ),
       ),
-      // Receipt List
       React.createElement(View, { style: { marginBottom: 20 } },
         React.createElement(Text, { style: { fontSize: 14, fontWeight: "bold", color: "#10b981", marginBottom: 10, textTransform: "uppercase" } }, "Receipt Details"),
         React.createElement(View, { style: styles.table },
@@ -117,14 +131,7 @@ export async function GET(request: NextRequest) {
             React.createElement(Text, { style: styles.cell }, "Category"),
             React.createElement(Text, { style: [styles.cell, { textAlign: "right" }] }, "Amount"),
           ),
-          ...receipts.map((receipt, i) =>
-            React.createElement(View, { style: styles.tableRow, key: i },
-              React.createElement(Text, { style: [styles.cell, { flex: 2 }] }, receipt.extracted_data?.date || receipt.created_at?.split("T")[0] || ""),
-              React.createElement(Text, { style: [styles.cell, { flex: 3 }] }, receipt.extracted_data?.merchant || "—"),
-              React.createElement(Text, { style: styles.cell }, receipt.extracted_data?.category || "Miscellaneous"),
-              React.createElement(Text, { style: [styles.cell, { textAlign: "right" }] }, `$${(receipt.extracted_data?.amount || 0).toFixed(2)}`),
-            )
-          ),
+          receiptRows,
         ),
       ),
     ),
