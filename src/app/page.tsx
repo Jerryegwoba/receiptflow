@@ -42,14 +42,14 @@ export default function HomePage() {
             for tax season. Built for freelancers and solopreneurs.
           </p>
           <div className="mt-8 flex gap-4">
-            <Link href="/auth/signup">
+            <Link href="/pricing">
               <Button size="lg">
-                Start Free <ArrowRight className="ml-2 h-4 w-4" />
+                View Pricing <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
             </Link>
-            <Link href="/auth/login">
+            <Link href="/auth/signup">
               <Button variant="outline" size="lg">
-                Sign In
+                Start Free
               </Button>
             </Link>
           </div>
